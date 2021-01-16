@@ -37,6 +37,7 @@ def get_recommendations(predicted_ratings_row, data_matrix_row, items, k=5):
     items = items.set_index('book_id')
     return items['title'].iloc[sim_scores]
 
+
 # collabrotive filtering
 def build_CF_prediction_matrix(sim):
     """
@@ -63,6 +64,7 @@ def build_CF_prediction_matrix(sim):
     user_similarity = 1 - pairwise_distances(ratings_diff, metric=sim)
     user_similarity = np.array([keep_top_k(np.array(arr), k=10) for arr in user_similarity])
     return mean_user_rating + user_similarity.dot(ratings_diff) / np.array([np.abs(user_similarity).sum(axis=1)]).T
+
 
 def get_CF_recommendation(user_id, k):
     """
@@ -144,8 +146,8 @@ def get_contact_recommendation(book_name, k):
 
     idx = indices[book_name]
     if idx.count() > 1:
-        print("There are fre books with original title:{}, assuming you asked for similarity for the first one".format(
-            book_name))
+        print("There are {} books with original title:{}, assuming you asked for similarity for the first one".format(
+            idx.count(), book_name))
         idx = idx[0]
     # Get the pairwise similarity scores of all books with that book
     sim_scores = list(enumerate(cosine_sim2[idx]))
