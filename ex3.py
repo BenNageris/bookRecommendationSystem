@@ -15,6 +15,8 @@ SIMILARITY_FUNCTION = "cosine"
 DEFAULT_SEPERATOR = ","
 DEFAULT_ENCODING = "ISO-8859-1"
 
+PRED_MATRIX = None
+COSINE_SIM2 = None
 
 # function gets csv file path, seperator and encoding and returns its dataframe
 def _load_data(file_path, seperator=DEFAULT_SEPERATOR, encoding=DEFAULT_ENCODING):
@@ -63,7 +65,9 @@ def build_CF_prediction_matrix(sim):
     # calculate user x user similarity matrix
     user_similarity = 1 - pairwise_distances(ratings_diff, metric=sim)
     user_similarity = np.array([keep_top_k(np.array(arr), k=10) for arr in user_similarity])
-    return mean_user_rating + user_similarity.dot(ratings_diff) / np.array([np.abs(user_similarity).sum(axis=1)]).T
+    PRED_MATRIX = mean_user_rating + user_similarity.dot(ratings_diff) / np.array(
+        [np.abs(user_similarity).sum(axis=1)]).T
+    return PRED_MATRIX
 
 
 def get_CF_recommendation(user_id, k):
@@ -73,9 +77,10 @@ def get_CF_recommendation(user_id, k):
     :param k: int
     :return: dataframe
     """
-    global DATA_MATRIX, ITEMS
-    pred_matrix = build_CF_prediction_matrix(SIMILARITY_FUNCTION)
-    predicted_ratings_row = pred_matrix[user_id - 1]
+    global DATA_MATRIX, ITEMS, PRED_MATRIX
+    if PRED_MATRIX is None:
+        PRED_MATRIX = build_CF_prediction_matrix(SIMILARITY_FUNCTION)
+    predicted_ratings_row = PRED_MATRIX[user_id - 1]
     data_matrix_row = DATA_MATRIX[user_id - 1]
 
     return get_recommendations(predicted_ratings_row, data_matrix_row, ITEMS, k)
@@ -138,19 +143,20 @@ def get_contact_recommendation(book_name, k):
     :param k: int
     :return: dataframe
     """
-    global BOOKS_WITH_TAG_NAME
-    cosine_sim2 = build_contact_sim_metrix()
+    global BOOKS_WITH_TAG_NAME, COSINE_SIM2
+    if COSINE_SIM2 is None:
+        COSINE_SIM2 = build_contact_sim_metrix()
     # Get the index of the book that matches the title
     metadata = BOOKS_WITH_TAG_NAME.reset_index()
     indices = pd.Series(metadata.index, index=metadata['original_title'])
 
     idx = indices[book_name]
-    if idx.count() > 1:
+    if type(idx) == pd.core.series.Series  and idx.count() > 1:
         print("There are {} books with original title:{}, assuming you asked for similarity for the first one".format(
             idx.count(), book_name))
         idx = idx[0]
     # Get the pairwise similarity scores of all books with that book
-    sim_scores = list(enumerate(cosine_sim2[idx]))
+    sim_scores = list(enumerate(COSINE_SIM2[idx]))
     # Sort the books based on the similarity scores
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     # Get the scores of the K most similar books (the first is the books we asked)
@@ -165,6 +171,7 @@ if __name__ == "__main__":
     # PART B
     print(get_CF_recommendation(1, 10))
     print(get_CF_recommendation(511, 10))
+    print(get_CF_recommendation(512, 10))
 
     # PART C
     book_name = "Twilight"
@@ -172,4 +179,13 @@ if __name__ == "__main__":
     print("The {} best recommendations for the book {} are:".format(book_name, k))
     print(get_contact_recommendation(book_name, k))
 
+    book_name = "Harry Potter and the Philosopher's Stone"
+    k = 10
+    print("The {} best recommendations for the book {} are:".format(book_name, k))
+    print(get_contact_recommendation(book_name, k))
+
+    book_name = "To Kill a Mockingbird"
+    k = 10
+    print("The {} best recommendations for the book {} are:".format(book_name, k))
+    print(get_contact_recommendation(book_name, k))
     # PART D
