@@ -5,23 +5,46 @@ from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
 
-RATINGS_PATH = r"../ratings.csv"
-BOOKS_PATH = r"../books.csv"
-TAGS_PATH = r"../tags.csv"
-BOOKS_TAGS_PATH = r"../books_tags.csv"
+RATINGS_PATH = r"..\ratings.csv"
+TAGS_PATH = r"..\tags.csv"
+BOOKS_TAGS_PATH = r"..\books_tags.csv"
+TEST_PATH = r"..\test.csv"
+BOOKS_PATH = r"..\books.csv"
+USERS_PATH = r"..\users.csv"
 
 SIMILARITY_FUNCTION = "cosine"
 
 DEFAULT_SEPERATOR = ","
 DEFAULT_ENCODING = "ISO-8859-1"
 
+ITEMS = None
+USERS = None
 PRED_MATRIX = None
 COSINE_SIM2 = None
 
-# function gets csv file path, seperator and encoding and returns its dataframe
+
 def _load_data(file_path, seperator=DEFAULT_SEPERATOR, encoding=DEFAULT_ENCODING):
+    """
+    The function gets csv file path, seperator and encoding and returns its dataframe
+    :param file_path: string
+    :param seperator: string
+    :param encoding: string
+    :return:
+    """
     df = pd.read_csv(file_path, sep=seperator, encoding=encoding)
     return df
+
+
+def _normalize_items(items):
+    """
+    The function gets items (books) dataframe as a parameter and returns it with padded index (without the missing book_ids)
+    :param items: dataframe
+    :return: dataframe
+    """
+    tmp_items = pd.DataFrame(index=range(items.book_id.max()), columns=items.columns)
+    for index, item in items.iterrows():
+        tmp_items.at[item.book_id - 1] = item
+    return tmp_items
 
 
 # utils from TIRGUL colab
@@ -36,8 +59,9 @@ def get_recommendations(predicted_ratings_row, data_matrix_row, items, k=5):
     predicted_ratings_row[~np.isnan(data_matrix_row)] = 0
     idx = np.argsort(-predicted_ratings_row)
     sim_scores = idx[0:k]
-    items = items.set_index('book_id')
-    return items['title'].iloc[sim_scores]
+    items2 = items.set_index('book_id')
+    return items2["title"].iloc[sim_scores]
+    # return items[items["book_id"].isin(sim_scores)]["title"]
 
 
 # collabrotive filtering
@@ -47,14 +71,12 @@ def build_CF_prediction_matrix(sim):
     :param sim: "cosine" or "euclidean" or "jaccard"
     :return: matrix
     """
-    global ITEMS, DATA_MATRIX
-    ratings = _load_data(RATINGS_PATH)
-    ITEMS = _load_data(BOOKS_PATH)
-    n_users = ratings.user_id.astype(int).max()
-    n_items = ratings.book_id.astype(int).max()
+    global USERS, RATINGS, ITEMS, DATA_MATRIX
+    n_users = USERS.user_id.max()
+    n_items = ITEMS.book_id.max()
     DATA_MATRIX = np.empty((n_users, n_items))
     DATA_MATRIX[:] = np.nan
-    for line in ratings.itertuples():
+    for line in RATINGS.itertuples():
         user = line[1] - 1
         book = line[2] - 1
         rating = line[3]
@@ -151,7 +173,7 @@ def get_contact_recommendation(book_name, k):
     indices = pd.Series(metadata.index, index=metadata['original_title'])
 
     idx = indices[book_name]
-    if type(idx) == pd.core.series.Series  and idx.count() > 1:
+    if type(idx) == pd.core.series.Series and idx.count() > 1:
         print("There are {} books with original title:{}, assuming you asked for similarity for the first one".format(
             idx.count(), book_name))
         idx = idx[0]
@@ -167,25 +189,47 @@ def get_contact_recommendation(book_name, k):
     return books['title'].iloc[book_indices]
 
 
+def precision_k(k):
+    """
+    The function takes as a parameter integer and checks precision rate for k recommendations
+    :param k: int
+    :return: float
+    """
+    test = _load_data(TEST_PATH)
+    test_only_4_and_5 = test.loc[test['rating'].isin([4, 5])]
+    unique_user_ids = test_only_4_and_5.user_id.unique()
+    user_ids_to_check = np.array([], dtype=int)
+    for user_id in unique_user_ids:
+        if test_only_4_and_5[test_only_4_and_5.user_id == user_id].book_id.count() >= k:
+            user_ids_to_check = np.append(user_ids_to_check, user_id)
+    total = 0
+    # foreach user_id in user_ids_to_check
+    for user_id in user_ids_to_check:
+        k_recommendations = get_CF_recommendation(user_id, k)
+        real_ratings_of_user_id = test_only_4_and_5[test_only_4_and_5.user_id == user_id].book_id
+        num_of_hits = len(np.intersect1d(k_recommendations.index, real_ratings_of_user_id))
+        total = total + (float(num_of_hits) / k)
+    return total / len(user_ids_to_check)
+
+
 if __name__ == "__main__":
+    # loads to increase efficiency
+    RATINGS = _load_data(RATINGS_PATH)
+    ITEMS = _load_data(BOOKS_PATH)
+    USERS = _load_data(USERS_PATH)
+    ITEMS = _normalize_items(ITEMS)
+
     # PART B
-    print(get_CF_recommendation(1, 10))
-    print(get_CF_recommendation(511, 10))
-    print(get_CF_recommendation(512, 10))
+    # print(get_CF_recommendation(1, 10))
+    # print(get_CF_recommendation(511, 10))
+    # print(get_CF_recommendation(3671, 10))
 
     # PART C
-    book_name = "Twilight"
-    k = 10
-    print("The {} best recommendations for the book {} are:".format(book_name, k))
-    print(get_contact_recommendation(book_name, k))
+    # book_name = "Twilight"
+    # k = 10
+    # print("The {} best recommendations for the book {} are:".format(book_name, k))
+    # print(get_contact_recommendation(book_name, k))
 
-    book_name = "Harry Potter and the Philosopher's Stone"
-    k = 10
-    print("The {} best recommendations for the book {} are:".format(book_name, k))
-    print(get_contact_recommendation(book_name, k))
-
-    book_name = "To Kill a Mockingbird"
-    k = 10
-    print("The {} best recommendations for the book {} are:".format(book_name, k))
-    print(get_contact_recommendation(book_name, k))
     # PART D
+    print(precision_k(10))
+    # print(get_CF_recommendation(3017, 10))
