@@ -12,7 +12,7 @@ TEST_PATH = r"..\test.csv"
 BOOKS_PATH = r"..\books.csv"
 USERS_PATH = r"..\users.csv"
 
-SIMILARITY_FUNCTION = "cosine"
+SIMILARITY_FUNCTION = "jaccard"
 
 DEFAULT_SEPERATOR = ","
 DEFAULT_ENCODING = "ISO-8859-1"
@@ -125,8 +125,9 @@ def build_contact_sim_metrix():
         tags['tag_id'] = tags['tag_id'].astype('int')
         books_tags_2 = books_tags.merge(tags, on="tag_id")
         books_with_tags_names = books_tags_2.groupby(["goodreads_book_id"])['tag_name'].apply(' '.join).reset_index()
-        books['goodreads_book_id'] = books['goodreads_book_id'].astype('int')
-        BOOKS_WITH_TAG_NAME = books.merge(books_with_tags_names, on="goodreads_book_id", how="left")
+        books['book_id'] = books['book_id'].astype('int')
+        BOOKS_WITH_TAG_NAME = books.merge(books_with_tags_names, left_on="book_id", right_on="goodreads_book_id",
+                                          how="left")
         return BOOKS_WITH_TAG_NAME
 
     def _clean_data(x):
@@ -225,11 +226,11 @@ if __name__ == "__main__":
     # print(get_CF_recommendation(3671, 10))
 
     # PART C
-    # book_name = "Twilight"
-    # k = 10
-    # print("The {} best recommendations for the book {} are:".format(book_name, k))
-    # print(get_contact_recommendation(book_name, k))
+    book_name = "Twilight"
+    k = 10
+    print("The {} best recommendations for the book {} are:".format(book_name, k))
+    print(get_contact_recommendation(book_name, k))
 
     # PART D
-    print(precision_k(10))
+    # print(precision_k(10))
     # print(get_CF_recommendation(3017, 10))
