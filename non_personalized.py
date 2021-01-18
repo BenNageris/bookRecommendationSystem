@@ -66,18 +66,13 @@ def normalized_age(x):
     return a + (10 - a % 10)
 
 
-def get_simply_recommendation(k):
+def calc_top_k(k, metadata):
     """
-    calculate weighted_rating for each book and print top-k books
+    calculate weighted_rating and print top-k books
     """
-    # Load Books Rating Metadata
-    metadata_books = pd.read_csv('dataset\\books.csv', low_memory=False, encoding="ISO-8859-1")
-    metadata = pd.read_csv(RATING_VOTE_FILE, low_memory=False, encoding="ISO-8859-1")
-    metadata = pd.merge(metadata, metadata_books, on="book_id")
-
     # Calculate mean of vote average column
     C = metadata['vote_average'].mean()
-    
+
     # Calculate the minimum number of votes required to be in the chart, m
     m = metadata['vote_count'].quantile(0.90)
     q_books = metadata.copy().loc[metadata['vote_count'] >= m]
@@ -91,7 +86,21 @@ def get_simply_recommendation(k):
     # Print the top 10 books
     print(q_books[['book_id', 'title', 'vote_count', 'vote_average', 'score']].head(k))
 
-    del metadata, metadata_books, q_books
+    del q_books
+
+
+def get_simply_recommendation(k):
+    """
+    calculate weighted_rating for each book and print top-k books
+    """
+    # Load Books Rating Metadata
+    metadata_books = pd.read_csv('dataset\\books.csv', low_memory=False, encoding="ISO-8859-1")
+    metadata = pd.read_csv(RATING_VOTE_FILE, low_memory=False, encoding="ISO-8859-1")
+    metadata = pd.merge(metadata, metadata_books, on="book_id")
+
+    calc_top_k(k, metadata)
+
+    del metadata, metadata_books
 
 
 def get_simply_place_recommendation(place, k):
@@ -104,23 +113,10 @@ def get_simply_place_recommendation(place, k):
     metadata = pd.merge(metadata, metadata_books, on="book_id")
 
     metadata_per_place = metadata.copy().loc[metadata['location'] == place]
-    # Calculate mean of vote average column
-    C = metadata_per_place['vote_average'].mean()
 
-    # Calculate the minimum number of votes required to be in the chart, m
-    m = metadata_per_place['vote_count'].quantile(0.90)
-    q_books = metadata_per_place.copy().loc[metadata_per_place['vote_count'] >= m]
+    calc_top_k(k, metadata_per_place)
 
-    # Define a new feature 'score' and calculate its value with `weighted_rating()`
-    q_books['score'] = q_books.apply(weighted_rating, axis=1, args=(m, C))
-
-    # Sort movies based on score calculated above
-    q_books = q_books.sort_values('score', ascending=False)
-
-    # Print the top 10 books
-    print(q_books[['book_id', 'title', 'vote_count', 'vote_average', 'score']].head(k))
-
-    del metadata, metadata_books, metadata_per_place, q_books
+    del metadata, metadata_books, metadata_per_place
 
 
 def get_simply_age_recommendation(age, k):
@@ -134,23 +130,10 @@ def get_simply_age_recommendation(age, k):
     metadata = pd.merge(metadata, metadata_books, on="book_id")
 
     metadata_per_age = metadata.copy().loc[metadata['age'] == age]
-    # Calculate mean of vote average column
-    C = metadata_per_age['vote_average'].mean()
 
-    # Calculate the minimum number of votes required to be in the chart, m
-    m = metadata_per_age['vote_count'].quantile(0.90)
-    q_books = metadata_per_age.copy().loc[metadata_per_age['vote_count'] >= m]
+    calc_top_k(k, metadata_per_age)
 
-    # Define a new feature 'score' and calculate its value with `weighted_rating()`
-    q_books['score'] = q_books.apply(weighted_rating, axis=1, args=(m, C))
-
-    # Sort movies based on score calculated above
-    q_books = q_books.sort_values('score', ascending=False)
-
-    # Print the top 10 books
-    print(q_books[['book_id', 'title', 'vote_count', 'vote_average', 'score']].head(k))
-
-    del metadata, metadata_books, metadata_per_age, q_books
+    del metadata, metadata_books, metadata_per_age
 
 
 def non_personalized_main():
