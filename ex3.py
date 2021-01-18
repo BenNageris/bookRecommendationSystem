@@ -126,8 +126,8 @@ def build_contact_sim_metrix():
         tags['tag_id'] = tags['tag_id'].astype('int')
         books_tags_2 = books_tags.merge(tags, on="tag_id")
         books_with_tags_names = books_tags_2.groupby(["goodreads_book_id"])['tag_name'].apply(' '.join).reset_index()
-        books['book_id'] = books['book_id'].astype('int')
-        BOOKS_WITH_TAG_NAME = books.merge(books_with_tags_names, left_on="book_id", right_on="goodreads_book_id",
+        books['goodreads_book_id'] = books['goodreads_book_id'].astype('int')
+        BOOKS_WITH_TAG_NAME = books.merge(books_with_tags_names, on="goodreads_book_id",
                                           how="left")
         return BOOKS_WITH_TAG_NAME
 
