@@ -4,6 +4,7 @@ import heapq
 from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
+import math
 
 RATINGS_PATH = r"..\ratings.csv"
 TAGS_PATH = r"..\tags.csv"
@@ -12,7 +13,7 @@ TEST_PATH = r"..\test.csv"
 BOOKS_PATH = r"..\books.csv"
 USERS_PATH = r"..\users.csv"
 
-SIMILARITY_FUNCTION = "jaccard"
+SIMILARITY_FUNCTION = "cosine"
 
 DEFAULT_SEPERATOR = ","
 DEFAULT_ENCODING = "ISO-8859-1"
@@ -213,6 +214,25 @@ def precision_k(k):
     return total / len(user_ids_to_check)
 
 
+def rmse():
+    """
+    The function gets k and returns the RMSE rate
+    :return: float
+    """
+    pred_matrix = build_CF_prediction_matrix(SIMILARITY_FUNCTION)
+    test_ratings = _load_data(TEST_PATH)
+    sum = 0
+    cnt = 0
+    for _, row in test_ratings.iterrows():
+        user_id = row['user_id'].astype(int)
+        book_id = row['book_id'].astype(int)
+        rating = row['rating'].astype(int)
+        diff = rating - pred_matrix[user_id - 1, book_id - 1]
+        sum = sum + math.pow(diff, 2)
+        cnt = cnt + 1
+    return math.sqrt(sum/cnt)
+
+
 if __name__ == "__main__":
     # loads to increase efficiency
     RATINGS = _load_data(RATINGS_PATH)
@@ -221,9 +241,9 @@ if __name__ == "__main__":
     ITEMS = _normalize_items(ITEMS)
 
     # PART B
-    # print(get_CF_recommendation(1, 10))
-    # print(get_CF_recommendation(511, 10))
-    # print(get_CF_recommendation(3671, 10))
+    print(get_CF_recommendation(1, 10))
+    print(get_CF_recommendation(511, 10))
+    print(get_CF_recommendation(3671, 10))
 
     # PART C
     book_name = "Twilight"
@@ -232,5 +252,5 @@ if __name__ == "__main__":
     print(get_contact_recommendation(book_name, k))
 
     # PART D
-    # print(precision_k(10))
-    # print(get_CF_recommendation(3017, 10))
+    print(precision_k(10))
+    print(rmse())
