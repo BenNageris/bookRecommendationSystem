@@ -65,6 +65,137 @@ def get_recommendations(predicted_ratings_row, data_matrix_row, items, k=5):
     # return items[items["book_id"].isin(sim_scores)]["title"]
 
 
+# non-personalized
+
+# Create rating_vote_count
+def create_rating_vote_count(metadata_rating):
+    """
+    Creating a csv file for the rating file with vote count and vote average
+    """
+    metadata_rating_new = metadata_rating.groupby(["book_id"]).count()
+    metadata_rating_new["rating"] = metadata_rating.groupby(["book_id"]).mean()["rating"]
+    metadata_rating_new.columns = ["vote_count", "vote_average"]
+    return metadata_rating_new
+
+
+def get_rating_vote_count_per_location(metadata):
+    """
+    Get a dataframe for the location and rating combined table with vote count and vote average
+    """
+    met1 = metadata.groupby(["location", "book_id"])["user_id"].count().reset_index()
+    met2 = metadata.groupby(["location", "book_id"])['rating'].mean().reset_index()
+    met = pd.merge(met1, met2, on=["location", "book_id"])
+    met.columns = ["location", "book_id", "vote_count", "vote_average"]
+    return met
+
+
+def create_rating_vote_count_per_age(metadata):
+    """
+    Creating a csv file for the age and rating combined table with vote count and vote average
+    """
+    met1 = metadata.groupby(["age", "book_id"])["user_id"].count().reset_index()
+    met2 = metadata.groupby(["age", "book_id"])['rating'].mean().reset_index()
+    met = pd.merge(met1, met2, on=["age", "book_id"])
+    met.columns = ["age", "book_id", "vote_count", "vote_average"]
+    return met
+
+
+def weighted_rating(x, m, C):
+    """
+    Function that computes the weighted rating of each book
+    """
+    v = x['vote_count']
+    R = x['vote_average']
+    # Calculation based on the IMDB formula
+    return (v / (v + m) * R) + (m / (m + v) * C)
+
+
+def normalized_age(x):
+    """
+    As requested in the exercise, any normalized between X1 to (X+1)0 change to (X+1)0.
+    for example:
+    34 -> 40, 21 -> 30, 50 -> 50, and so on..
+    """
+    if type(x) is int:
+        a = x
+    else:
+        a = x['age']
+    if a % 10 == 0:
+        return a
+    return a + (10 - a % 10)
+
+
+def calc_top_k(k, metadata):
+    """
+    calculate weighted_rating and print top-k books
+    """
+    # Calculate mean of vote average column
+    C = metadata['vote_average'].mean()
+
+    # Calculate the minimum number of votes required to be in the chart, m
+    m = metadata['vote_count'].quantile(0.90)
+    q_books = metadata.copy().loc[metadata['vote_count'] >= m]
+
+    # Define a new feature 'score' and calculate its value with `weighted_rating()`
+    q_books['score'] = q_books.apply(weighted_rating, axis=1, args=(m, C))
+
+    # Sort movies based on score calculated above
+    q_books = q_books.sort_values('score', ascending=False)
+
+    # Print the top 10 books
+    return q_books[['book_id', 'title', 'vote_count', 'vote_average', 'score']].head(k)
+
+
+def get_simply_recommendation(k):
+    """
+    calculate weighted_rating for each book and print top-k books
+    """
+    ratings = _load_data(RATINGS_PATH)
+    # Load Books Rating Metadata
+    metadata_books = _load_data(BOOKS_PATH)
+    metadata = create_rating_vote_count(ratings)
+    metadata = pd.merge(metadata, metadata_books, on="book_id")
+    return calc_top_k(k, metadata)[["book_id", "title"]].set_index("book_id")
+
+
+def get_simply_place_recommendation(place, k):
+    """
+    calculate weighted_rating for each book by the location of the rating users and print top-k books
+    """
+    # Load Books Rating Metadata
+    metadata_books = _load_data(BOOKS_PATH)
+    metadata_rating = _load_data(RATINGS_PATH)
+    metadata_user = _load_data(USERS_PATH)
+    metadata = pd.merge(metadata_rating, metadata_user, on="user_id")
+
+    metadata = get_rating_vote_count_per_location(metadata)
+    metadata = pd.merge(metadata, metadata_books, on="book_id")
+
+    metadata_per_place = metadata.copy().loc[metadata['location'] == place]
+
+    return calc_top_k(k, metadata_per_place)[["book_id", "title", "score"]].set_index("book_id")
+
+
+def get_simply_age_recommendation(age, k):
+    """
+    calculate weighted_rating for each book by the age of the rating users and print top-k books
+    """
+    age = normalized_age(age)
+    # Load Books Rating Metadata
+    metadata_books = _load_data(BOOKS_PATH)
+    metadata_rating = _load_data(RATINGS_PATH)
+    metadata_user = _load_data(USERS_PATH)
+    metadata = pd.merge(metadata_rating, metadata_user, on="user_id")
+    metadata['age'] = metadata.apply(normalized_age, axis=1)
+    metadata = create_rating_vote_count_per_age(metadata)
+
+    metadata = pd.merge(metadata, metadata_books, on="book_id")
+
+    metadata_per_age = metadata.copy().loc[metadata['age'] == age]
+
+    return calc_top_k(k, metadata_per_age)[["book_id", "title", "score"]].set_index("book_id")
+
+
 # collabrotive filtering
 def build_CF_prediction_matrix(sim):
     """
@@ -214,6 +345,25 @@ def precision_k(k):
     return total / len(user_ids_to_check)
 
 
+def ARHR(k):
+    tests = _load_data(TEST_PATH)
+    test_only_4_and_5 = tests[tests['rating'].isin([4, 5])]
+    user_ids_to_check = np.array([], dtype=int)
+    for user_id in test_only_4_and_5['user_id'].unique():
+        if test_only_4_and_5[test_only_4_and_5.user_id == user_id].book_id.count() >= k:
+            user_ids_to_check = np.append(user_ids_to_check, user_id)
+    test_only_4_and_5 = test_only_4_and_5.loc[test_only_4_and_5['user_id'].isin(user_ids_to_check)]
+    total_sum = 0
+    unique_tests_4_5_user_ids = test_only_4_and_5['user_id'].unique()
+    for user in unique_tests_4_5_user_ids:
+        recommendations = get_CF_recommendation(user, k)
+        for item_index in range(k):
+            recommend_idx = recommendations.index[item_index]
+            if recommend_idx in list(test_only_4_and_5[test_only_4_and_5['user_id'] == user]['book_id']):
+                total_sum += 1 / (item_index + 1)
+    return total_sum / len(unique_tests_4_5_user_ids)
+
+
 def rmse():
     """
     The function gets k and returns the RMSE rate
@@ -230,7 +380,7 @@ def rmse():
         diff = rating - pred_matrix[user_id - 1, book_id - 1]
         sum = sum + math.pow(diff, 2)
         cnt = cnt + 1
-    return math.sqrt(sum/cnt)
+    return math.sqrt(sum / cnt)
 
 
 if __name__ == "__main__":
@@ -240,10 +390,21 @@ if __name__ == "__main__":
     USERS = _load_data(USERS_PATH)
     ITEMS = _normalize_items(ITEMS)
 
+    # PART A
+    K = 10
+    print(get_simply_recommendation(K))
+    print("\n\n")
+    K = 10
+    place = "Ohio"
+    print(get_simply_place_recommendation(place, K))
+    print("\n\n")
+    K = 10
+    age = 28
+    print(get_simply_age_recommendation(age, K))
+    print("\n\n")
+
     # PART B
-    print(get_CF_recommendation(1, 10))
-    print(get_CF_recommendation(511, 10))
-    print(get_CF_recommendation(3671, 10))
+    # print(get_CF_recommendation(1, 10))
 
     # PART C
     book_name = "Twilight"
@@ -253,4 +414,5 @@ if __name__ == "__main__":
 
     # PART D
     print(precision_k(10))
+    print(ARHR(10))
     print(rmse())
